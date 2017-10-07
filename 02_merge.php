@@ -13,15 +13,11 @@ foreach(glob(__DIR__ . '/raw/*.json') AS $jsonFile) {
   // }
   // continue;
   foreach($json['features'] AS $f) {
-    $targetFile = $jsonPath . '/' . substr($f['attributes']['段號'], 0, 6) . '.json';
-    if(file_exists($targetFile)) {
-      $fc = json_decode(file_get_contents($targetFile), true);
-    } else {
-      $fc = array(
-        'type' => 'FeatureCollection',
-        'features' => array(),
-      );
+    $targetPath = $jsonPath . '/' . substr($f['attributes']['段號'], 0, 6);
+    if(!file_exists($targetPath)) {
+      mkdir($targetPath, 0777);
     }
+    $targetFile = $targetPath . '/' . $f['attributes']['段號'] . '.json';
     $feature = array(
       'type' => 'Feature',
       'properties' => array(
@@ -45,26 +41,44 @@ foreach(glob(__DIR__ . '/raw/*.json') AS $jsonFile) {
         'type' => 'Polygon',
         'coordinates' => array(),
       );
+      foreach($f['geometry']['rings'] AS $k1 => $ring) {
+        foreach($ring AS $k2 => $point) {
+          $point = twd97_to_latlng($point[0], $point[1]);
+          $ring[$k2][0] = floatval($point['lng']);
+          $ring[$k2][1] = floatval($point['lat']);
+        }
+        $feature['geometry']['coordinates'][] = $ring;
+      }
     } else {
       $feature['geometry'] = array(
         'type' => 'MultiPolygon',
         'coordinates' => array(),
       );
-    }
-    foreach($f['geometry']['rings'] AS $k1 => $ring) {
-      foreach($ring AS $k2 => $point) {
-        $point = twd97_to_latlng($point[0], $point[1]);
-        $ring[$k2][0] = floatval($point['lng']);
-        $ring[$k2][1] = floatval($point['lat']);
+      foreach($f['geometry']['rings'] AS $k1 => $ring) {
+        foreach($ring AS $k2 => $point) {
+          $point = twd97_to_latlng($point[0], $point[1]);
+          $ring[$k2][0] = floatval($point['lng']);
+          $ring[$k2][1] = floatval($point['lat']);
+        }
+        $feature['geometry']['coordinates'][] = array($ring);
       }
-      $feature['geometry']['coordinates'][] = $ring;
     }
-
-    $fc['features'][] = $feature;
-    file_put_contents($targetFile, json_encode($fc, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    file_put_contents($targetFile, json_encode($feature));
   }
 }
 
+foreach(glob(__DIR__ . '/geojson/*') AS $tmpPath) {
+  $fc = array(
+    'type' => 'FeatureCollection',
+    'features' => array(),
+  );
+  foreach(glob($tmpPath . '/*.json') AS $jsonFile) {
+    $fc['features'][] = json_decode(file_get_contents($jsonFile));
+    unlink($jsonFile);
+  }
+  file_put_contents($tmpPath . '.json', json_encode($fc));
+  rmdir($tmpPath);
+}
 
 function twd97_to_latlng($x, $y) {
     $a = 6378137.0;
